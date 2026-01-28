@@ -1,0 +1,35 @@
+ekf_filter_node:
+  ros__parameters:
+
+    frequency: 100.0
+    sensor_timeout: 0.1
+    two_d_mode: false
+
+    publish_tf: false
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
+
+    # Visual SLAM pose input
+    pose0: /orbslam3/pose
+    pose0_config: [true, true, true,
+                   true, true, true,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+
+    pose0_differential: false
+    pose0_relative: false
+
+    # IMU input (synthetic)
+    imu0: /fake_imu/data
+    imu0_config: [false, false, false,
+                  true, true, true,
+                  false, false, false,
+                  true, true, true,
+                  false, false, false]
+
+    imu0_remove_gravitational_acceleration: true
