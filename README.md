@@ -5,7 +5,7 @@ This guide explains how to run **ORB-SLAM3 in stereo mode** using the **infrared
 
 The setup disables depth and RGB streams and uses only **infra1 + infra2**, which is the recommended configuration for stereo ORB-SLAM.
 
----
+
 
 ## 1. Hardware & Prerequisites
 
