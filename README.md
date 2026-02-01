@@ -52,8 +52,7 @@ lsusb | grep Intel
 ```
 
 You should see an Intel RealSense device listed.
-
-⚠️ If the camera shows up as USB 2.0, ORB-SLAM will likely fail due to bandwidth limitations.
+If the camera shows up as USB 2.0, ORB-SLAM will likely fail due to bandwidth limitations.
 
 ---
 
@@ -111,10 +110,149 @@ Test a single message to confirm valid data:
 ```bash
 ros2 topic echo /infra1/image_rect_raw --once
 ```
+ this works, the camera pipeline is correct.
 
-If this works, the camera pipeline is correct.
+
+## 0. Build ORB-SLAM3 (ROS 2)
+
+This section explains how to build **ORB-SLAM3 with ROS 2 support** before running the stereo pipeline.
 
 ---
+
+### 0.1 Install System Dependencies
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  cmake \
+  git \
+  libopencv-dev \
+  libeigen3-dev \
+  libboost-all-dev \
+  libgl1-mesa-dev \
+  libglew-dev \
+  libyaml-cpp-dev
+```
+
+---
+
+### 0.2 Install Pangolin
+
+ORB-SLAM3 requires **Pangolin** for visualization.
+
+```bash
+cd ~
+git clone https://github.com/stevenlovegrove/Pangolin.git
+cd Pangolin
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+sudo make install
+```
+
+---
+
+### 0.3 Clone ORB-SLAM3
+
+```bash
+cd ~
+git clone https://github.com/UZ-SLAMLab/ORB_SLAM3.git
+cd ORB_SLAM3
+```
+
+---
+
+### 0.4 Build ORB-SLAM3 Core
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+This builds:
+
+* ORB-SLAM3 core libraries
+* Vocabulary tools
+* Example binaries
+
+Make sure **no errors** occur here before continuing.
+
+---
+
+### 0.5 Build ROS 2 Wrapper
+
+ORB-SLAM3 includes a ROS 2 interface in the `Examples/ROS2` folder.
+
+```bash
+cd ~/ORB_SLAM3/Examples/ROS2
+colcon build --symlink-install
+```
+
+After a successful build, source the workspace:
+
+```bash
+source install/setup.bash
+
+### 0.6 Verify ORB-SLAM3 ROS 2 Nodes
+
+```bash
+ros2 pkg list | grep orbslam3
+```
+
+You should see:
+
+```
+orbslam3
+```
+
+---
+
+## Build Order Summary
+
+```text
+1. Install dependencies
+2. Build Pangolin
+3. Build ORB-SLAM3 core
+4. Build ROS 2 wrapper
+5. Source workspace
+```
+
+---
+
+## Common Build Issues
+
+### Pangolin not found
+
+```text
+Pangolin_DIR not found
+```
+
+Fix:
+
+```bash
+sudo ldconfig
+```
+
+---
+
+### OpenCV version mismatch
+
+* Use system OpenCV (`libopencv-dev`)
+* Avoid mixing conda OpenCV
+
+---
+
+### Jetson users
+
+* Build with fewer cores:
+
+```bash
+make -j2
+```
+
+* Ensure swap is enabled
+
 
 ## 6. Run ORB-SLAM3 (Stereo Mode)
 
