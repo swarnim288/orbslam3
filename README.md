@@ -282,6 +282,228 @@ If everything is working correctly:
 * Tracking status changes to **OK**
 
 ---
+---
+
+# Fake IMU + EKF Fusion + Motion-Compensated Point Cloud (ROS 2)
+
+## Node Graph
+
+```
+/slam_pose            → visual SLAM pose (30 FPS)
+/fake_imu             → synthetic IMU from SLAM pose
+/ekf_fusion           → EKF predict + update
+/pointcloud_mapper    → motion-compensated point cloud
+```
+
+---
+
+## 1. Fake IMU Node
+
+**Node**
+
+```
+fake_imu
+```
+
+**Subscribe**
+
+```
+/slam/pose   (geometry_msgs/PoseStamped)
+```
+
+**Publish**
+
+```
+/imu/data_raw   (sensor_msgs/Imu)
+```
+
+**Logic**
+
+```cpp
+onPose(pose_k, t_k)
+{
+    buffer.push(pose_k)
+
+    if buffer has pose_{k-1}, pose_k, pose_{k+1}:
+
+        dt = t_k - t_{k-1}
+
+        // Gyroscope
+        q_k    = pose_k.orientation
+        q_prev = pose_{k-1}.orientation
+
+        dq = q_k * inverse(q_prev)
+        omega = (2.0 / dt) * logQuaternion(dq)
+
+        // Accelerometer
+        p_prev = pose_{k-1}.position
+        p_k    = pose_k.position
+        p_next = pose_{k+1}.position
+
+        a_world = (p_next - 2*p_k + p_prev) / (dt*dt)
+        R = rotationMatrix(q_k)
+        a_imu = transpose(R) * (a_world - gravity)
+
+        publish Imu:
+            angular_velocity = omega
+            linear_acceleration = a_imu
+            header.stamp = t_k
+}
+```
+
+---
+
+## 2. EKF Fusion Node
+
+**Node**
+
+```
+ekf_fusion
+```
+
+**Subscribe**
+
+```
+/imu/data_raw   (sensor_msgs/Imu)
+/slam/pose      (geometry_msgs/PoseStamped)
+```
+
+**Publish**
+
+```
+/fused/odometry (nav_msgs/Odometry)
+/tf             (world → imu_link)
+```
+
+**State**
+
+```cpp
+x = {
+    position p (3),
+    velocity v (3),
+    orientation q (4),
+    accel_bias ba (3),
+    gyro_bias bg (3)
+}
+
+P = 15x15 covariance
+```
+
+---
+
+### EKF Prediction (IMU)
+
+```cpp
+onImu(imu, dt)
+{
+    omega = imu.angular_velocity - bg
+    accel = imu.linear_acceleration - ba
+
+    q = q * Exp(omega * dt)
+
+    v = v + (R(q) * accel + gravity) * dt
+    p = p + v * dt + 0.5 * (R(q) * accel + gravity) * dt * dt
+
+    P = F * P * F.transpose() + Q
+}
+```
+
+---
+
+### EKF Update (SLAM Pose)
+
+```cpp
+onSlamPose(pose)
+{
+    z_p = pose.position
+    z_q = pose.orientation
+
+    r_p = z_p - p
+    r_q = quaternionError(z_q, q)
+
+    r = [r_p, r_q]
+
+    K = P * H.transpose() * inverse(H * P * H.transpose() + R)
+
+    x = x + K * r
+    P = (I - K * H) * P
+
+    normalize(q)
+
+    publish fused odometry
+}
+```
+
+---
+
+## 3. Motion-Compensated Point Cloud Node
+
+**Node**
+
+```
+pointcloud_mapper
+```
+
+**Subscribe**
+
+```
+/camera/depth/points  (sensor_msgs/PointCloud2)
+/fused/odometry       (nav_msgs/Odometry)
+```
+
+**Publish**
+
+```
+/map/points           (sensor_msgs/PointCloud2)
+```
+
+**Logic**
+
+```cpp
+onPointCloud(cloud)
+{
+    pose = latest_fused_pose()
+
+    for point p_cam in cloud:
+        p_world = pose.R * p_cam + pose.t
+        global_cloud.add(p_world)
+
+    voxelFilter(global_cloud)
+    publish global_cloud
+}
+```
+
+---
+
+## 4. TF Frames
+
+```
+world
+ └── imu_link
+      └── camera_link
+```
+
+---
+
+## 5. Execution Order
+
+```
+1. SLAM node
+2. fake_imu
+3. ekf_fusion
+4. pointcloud_mapper
+```
+
+---
+
+## Notes
+
+* SLAM runs at 30 FPS
+* Synthetic IMU uses SLAM timestamps
+* EKF runs predict + update at same rate
+* Intended for validation and research only
+
+
 
 
 
